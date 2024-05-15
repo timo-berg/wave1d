@@ -305,14 +305,27 @@ function compute_rmse_bias(series_data, observed_data)
     return (rmse, bias)
 end
 
+function keep_positive(idcs, arr)
+    return idcs[arr.>=0], arr[arr.>=0]
+end
+
+function keep_negative(idcs, arr)
+    return idcs[arr.<=0], arr[arr.<=0]
+end
+
+
 function peak_statistic(model_data, observed_data)
-    peak_min_tolerance = 5
+    peak_min_tolerance = 7
 
     (peak_model_idcs, peak_model_vals, _) = findmaxima(model_data) |> peakproms!() |> peakwidths!(; min=peak_min_tolerance)
+    peak_model_idcs, peak_model_vals = keep_positive(peak_model_idcs, peak_model_vals)
     (peak_obs_idcs, peak_obs_vals, _) = findmaxima(observed_data) |> peakproms!() |> peakwidths!(; min=peak_min_tolerance)
+    peak_obs_idcs, peak_obs_vals = keep_positive(peak_obs_idcs, peak_obs_vals)
 
     (trough_model_idcs, trough_model_vals, _) = findminima(model_data) |> peakproms!() |> peakwidths!(; min=peak_min_tolerance)
+    trough_model_idcs, trough_model_vals = keep_negative(trough_model_idcs, trough_model_vals)
     (trough_obs_idcs, trough_obs_vals, _) = findminima(observed_data) |> peakproms!() |> peakwidths!(; min=peak_min_tolerance)
+    trough_obs_idcs, trough_obs_vals = keep_negative(trough_obs_idcs, trough_obs_vals)
 
     # Error if the number of peaks in the model and observations do not match
     if length(peak_model_idcs) != length(peak_obs_idcs) || length(trough_model_idcs) != length(trough_obs_idcs)
@@ -403,13 +416,43 @@ bias_df = DataFrame(
 )
 bias_long_df = stack(bias_df, [:Cadzand, :Vlissingen, :Terneuzen, :Hansweert, :Bath])
 
-violin(RMSE_long_df[!, :variable], RMSE_long_df[!, :value], title="RMSE", ylabel="RMSE", xlabel="Location", legend=false)
-violin(bias_long_df[!, :variable], bias_long_df[!, :value], title="Bias", ylabel="Bias", xlabel="Location", legend=false)
+plotlyjs()
+p = violin(RMSE_long_df[!, :variable], RMSE_long_df[!, :value], title="RMSE", ylabel="RMSE", xlabel="Location", legend=false, xdiscrete_values=["Cadzand", "Vlissingen", "Terneuzen", "Hansweert", "Bath"], alpha=0.5, dpi=1000)
+savefig(p, "figures/RMSE_violin.svg")
+p = violin(bias_long_df[!, :variable], bias_long_df[!, :value], title="Bias", ylabel="Bias", xlabel="Location", legend=false, xdiscrete_values=["Cadzand", "Vlissingen", "Terneuzen", "Hansweert", "Bath"], alpha=0.5)
+savefig(p, "figures/Bias_violin.eps")
 
 for i = 1:5
     p = errorline(1:288, series_data_noise[i, :, :], errorstyle=:ribbon, label="Ensemble Average", color=:blue)
     plot!(p, observed_data[i, 2:end], linecolor=:black, label="Observed Data")
     title!(p, locations[i])
     display(p)
+    savefig(p, "figures/ensemble_avg_$(locations[i]).png")
 end
 
+avg_noise_data = mean(series_data_noise, dims=3)
+
+error_stats = DataFrame(
+    Location=["Cadzand", "Vlissingen", "Terneuzen", "Hansweert", "Bath"],
+    RMSE=zeros(Float64, 5),
+    Bias=zeros(Float64, 5),
+    Amplitude_Mean=zeros(Float64, 5),
+    Amplitude_Std=zeros(Float64, 5),
+    Timing_Mean=zeros(Float64, 5),
+    Timing_Std=zeros(Float64, 5)
+)
+
+
+for i = 1:5
+    amplitude_error, timing_error = peak_statistic(avg_noise_data[i, :, 1], observed_data[i, 2:end])
+    rmse, bias = compute_rmse_bias(avg_noise_data[i, :, 1], observed_data[i, 2:end])
+
+    error_stats[i, :RMSE] = round(rmse, digits=2)
+    error_stats[i, :Bias] = round(bias, digits=2)
+    error_stats[i, :Amplitude_Mean] = round(amplitude_error.mean, digits=2)
+    error_stats[i, :Amplitude_Std] = round(amplitude_error.std, digits=2)
+    error_stats[i, :Timing_Mean] = round(timing_error.mean, digits=2)
+    error_stats[i, :Timing_Std] = round(timing_error.std, digits=2)
+end
+
+latexify(error_stats, env=:table, latex=false)
