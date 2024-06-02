@@ -217,7 +217,7 @@ function timestep_enkf(X, t_idx, observations, settings, is_twin)
     # Measurement update
     K = P * H' * inv(H * P * H' + R)
 
-    if !is_twin
+    if type ∈ ["enkf", "sim_ass"]
         X = X + K * (observations .- H * X)
     end
 
@@ -238,7 +238,7 @@ function plot_state(x, i, s)
     #This is a bug and will probably be solved soon.
 end
 
-function plot_series_enkf(t, X_data, series_data, s, obs_data)
+function plot_series_enkf(t, X_data, series_data, s, obs_data, type)
     #  X_data = zeros(Float64, length(ilocs), length(t), 50)
     X_data_locs = X_data[s["ilocs"], :, :]
 
@@ -254,7 +254,7 @@ function plot_series_enkf(t, X_data, series_data, s, obs_data)
         # errorline!(p, seconds_to_hours .* t, X_data_locs[i, :, :], errorstyle=:ribbon, color=:blue)
         title!(p, loc_names[i])
         xlabel!(p, "time [hours]")
-        savefig(p, replace("figures/$(loc_names[i])_sim_ass.png", " " => "_"))
+        savefig(p, replace("figures/$(loc_names[i])_$(type).png", " " => "_"))
         sleep(0.05) #Slow down to avoid that that the plotting backend starts complaining. This is a bug and should be fixed soon.
     end
 end
@@ -268,7 +268,7 @@ function AR_one_step(x_old, sig_w)
     return x_new
 end
 
-function simulate_enkf(n_ensemble=50, type)
+function simulate_enkf(n_ensemble, type)
     # for plots
     # locations of observations
     s = settings()
@@ -291,7 +291,7 @@ function simulate_enkf(n_ensemble=50, type)
     s["ilocs"] = ilocs
     s["loc_names"] = loc_names
 
-    if type ∈ ["enkf", "real_ass"]
+    if type ∈ ["enkf", "real_ass", "no_ass"]
         #load observations
         (obs_times, obs_values) = read_series("tide_cadzand.txt")
         observed_data = zeros(Float64, length(ilocs), length(obs_times))
@@ -306,7 +306,7 @@ function simulate_enkf(n_ensemble=50, type)
         observed_data[5, :] = obs_values[:]
 
         X_observe = zeros(Float64, length(ilocs), length(obs_times))
-    else if type ∈ ["sim_ass"]
+    elseif type ∈ ["sim_ass"]
         observed_data = load("data/observed_data.jld2")["observed_data"]
     end
 
@@ -326,13 +326,13 @@ function simulate_enkf(n_ensemble=50, type)
 
     for i = 1:nt
         println("timestep $(i), $(round(i/nt*100,digits=1)) %")
-        X, x_observe = timestep_enkf(X, i, observed_data[2:5, i], s, is_twin)
+        X, x_observe = timestep_enkf(X, i, observed_data[2:5, i], s, type)
         if plot_maps == true
             plot_state(x, i, s) #Show spatial plot. 
             #Very instructive, but turn off for production
         end
 
-        if is_twin
+        if type ∈ ["no_ass"]
             X_observe[:, i] = x_observe
         end
 
@@ -341,14 +341,14 @@ function simulate_enkf(n_ensemble=50, type)
         X_data[:, i, :] = X
     end
 
-    if is_twin
+    if type ∈ ["no_ass"]
         # Save the data for the twin experiment
-        # save("data/observed_data.jld2", "observed_data", X_observe)
+        save("data/observed_data.jld2", "observed_data", X_observe)
     end
 
 
     #plot timeseries
-    plot_series_enkf(t, X_data, series_data, s, observed_data)
+    plot_series_enkf(t, X_data, series_data, s, observed_data, type)
 
     println("ALl figures have been saved to files.")
     if plot_maps == false
@@ -364,9 +364,11 @@ end
 
 
 
+type = "sim_ass"
 
+series_data, observed_data, X_data, s = simulate_enkf(50, type)
 
-series_data, observed_data, X_data, s = simulate_enkf(50, "enkf")
+@save "data/X_data_$(type).jdl2" X_data
 
 function plot_state_for_gif(X_data, s, observed_data)
     x = mean(X_data, dims=2)[:]
@@ -389,7 +391,7 @@ anim = @animate for i ∈ 1:length(s["t"])
 end
 
 
-gif(anim, "figures/animation_enkf.gif", fps=15)
+gif(anim, "figures/animation_$(type).gif", fps=15)
 
 
 
