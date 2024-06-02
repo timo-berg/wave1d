@@ -201,7 +201,7 @@ function plot_series(t, series_data, s, obs_data)
         plot!(p, seconds_to_hours .* t[1:ntimes], obs_data[i, 1:ntimes], linecolor=:black, label=["model", "measured"])
         title!(p, loc_names[i])
         xlabel!(p, "time [hours]")
-        savefig(p, replace("$(loc_names[i]).png", " " => "_"))
+        savefig(p, replace("figures/$(loc_names[i]).png", " " => "_"))
         sleep(0.05) #Slow down to avoid that that the plotting backend starts complaining. This is a bug and should be fixed soon.
     end
 end
@@ -245,6 +245,7 @@ function simulate()
     t = s["t"]
     times = s["times"]
     series_data = zeros(Float64, length(ilocs), length(t))
+    x_data = zeros(Float64, length(x), length(t))
     nt = length(t)
     for i = 1:nt
         println("timestep $(i), $(round(i/nt*100,digits=1)) %")
@@ -253,6 +254,7 @@ function simulate()
             plot_state(x, i, s) #Show spatial plot. 
             #Very instructive, but turn off for production
         end
+        x_data[:, i] = x
         series_data[:, i] = x[ilocs]
     end
 
@@ -280,9 +282,26 @@ function simulate()
         println("This will make the computation much faster.")
     end
 
-    return series_data, observed_data, s
+    return x_data, series_data, observed_data, s
 end
 
+function plot_state_for_gif(x, s)
+    # println("plotting a map.")
+    #plot all waterlevels and velocities at one time
+    xh = 0.001 * s["x_h"]
+    p1 = plot(xh, x[1:2:end], ylabel="h", ylims=(-3.0, 5.0), legend=false)
+    xu = 0.001 * s["x_u"]
+    p2 = plot(xu, x[2:2:end], ylabel="u", ylims=(-2.0, 3.0), xlabel="x [km]", legend=false)
+    p = plot(p1, p2, layout=(2, 1))
+
+    return p
+end
+
+# anim = @animate for i ∈ 1:length(s["t"])
+#     plot_state_for_gif(x_data[:, i], s)
+# end
+
+# gif(anim, "figures/animation.gif", fps=10)
 
 function compute_peak_statistic(series_data, observed_data, s)
     nseries = length(s["loc_names"])
@@ -346,7 +365,7 @@ end
 
 
 
-series_data, observed_data, s = simulate()
+x_data, series_data, observed_data, s = simulate()
 
 ##### Q3: Error statistics
 error_stats = DataFrame(

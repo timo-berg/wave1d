@@ -27,6 +27,8 @@ using Peaks
 using Statistics
 using Distributions
 using StatsPlots
+using FileIO, JLD2
+
 
 struct stats #statistics of peaks
     mean::Float64
@@ -172,7 +174,7 @@ function initialize_enfk(s) #return (x,t) at initial time
     s["B"] = B
 
     # Measurement matrix (work out later)
-    ilocs = s["ilocs"]
+    ilocs = s["ilocs"][2:5]
     H = zeros(Float64, length(ilocs), 2 * n + 1)
     for i = eachindex(ilocs)
         H[i, ilocs[i]] = 1.0
@@ -182,9 +184,9 @@ function initialize_enfk(s) #return (x,t) at initial time
     return (x, t[1])
 end
 
-function timestep_enkf(X, t_idx, observations, settings)
+function timestep_enkf(X, t_idx, observations, settings, is_twin)
     # Random noise
-    sig_w = 0.01 #0.003224
+    sig_w = 0.2 #0.3224
     w = Normal(0, sig_w^2)
     w_vals = rand(w, size(X, 2))
 
@@ -193,12 +195,9 @@ function timestep_enkf(X, t_idx, observations, settings)
     B = settings["B"]
     H = settings["H"]
 
-    # Simulate measurement noise covariance matrix
-    measurement_noise_process = Normal(0, 0.01)
-    measurement_noise = [rand(measurement_noise_process) for i = 1:size(observations, 1)]
 
-    R = (measurement_noise .- mean(measurement_noise)) * (measurement_noise .- mean(measurement_noise))' / (size(observations, 1) - 1)
-
+    R = I * 10e-2
+    X[end, :] .+= w_vals # Add noise
 
     rhs = B * X
     rhs[1, :] .+= settings["h_left"][t_idx] #left boundary
@@ -207,7 +206,7 @@ function timestep_enkf(X, t_idx, observations, settings)
         X[:, i] = A \ rhs[:, i]
     end
 
-    X[end, :] .+= w_vals # Add noise
+    x_observe = X[settings["ilocs"], 1]
 
     # Ensemble average
     x_avg = mean(X, dims=2)
@@ -216,10 +215,13 @@ function timestep_enkf(X, t_idx, observations, settings)
     P = (X .- x_avg) * (X .- x_avg)' / (size(X, 2) - 1)
 
     # Measurement update
-    K = P * H' * inv(H * P * H' + Diagonal(diag(R)))
-    X = X + K * (observations .- H * X)
+    K = P * H' * inv(H * P * H' + R)
 
-    return X
+    if !is_twin
+        X = X + K * (observations .- H * X)
+    end
+
+    return X, x_observe
 end
 
 
@@ -236,32 +238,25 @@ function plot_state(x, i, s)
     #This is a bug and will probably be solved soon.
 end
 
-function plot_series(t, series_data, s, obs_data)
+function plot_series_enkf(t, X_data, series_data, s, obs_data)
+    #  X_data = zeros(Float64, length(ilocs), length(t), 50)
+    X_data_locs = X_data[s["ilocs"], :, :]
+
     # plot timeseries from model and observations
     loc_names = s["loc_names"]
     nseries = length(loc_names)
     for i = 1:nseries
         #fig=PyPlot.figure(i+1)
-        p = plot(seconds_to_hours .* t, series_data[i, :], linecolor=:blue, label=["model"])
+        std_X = std(X_data_locs[i, :, :], dims=2)
+        p = plot(seconds_to_hours .* t, series_data[i, :], ribbon=std_X, linecolor=:blue, label=["model"])
         ntimes = min(length(t), size(obs_data, 2))
-        plot!(p, seconds_to_hours .* t[1:ntimes], obs_data[i, 1:ntimes], linecolor=:black, label=["model", "measured"])
+        plot!(p, seconds_to_hours .* t[1:ntimes], obs_data[i, 1:ntimes], linecolor=:black, legend=false)
+        # errorline!(p, seconds_to_hours .* t, X_data_locs[i, :, :], errorstyle=:ribbon, color=:blue)
         title!(p, loc_names[i])
         xlabel!(p, "time [hours]")
-        savefig(p, replace("$(loc_names[i])_enkf.png", " " => "_"))
+        savefig(p, replace("figures/$(loc_names[i])_sim_ass.png", " " => "_"))
         sleep(0.05) #Slow down to avoid that that the plotting backend starts complaining. This is a bug and should be fixed soon.
     end
-end
-
-function AR_one(n, sig_w)
-    x = zeros(n)
-    w = Normal(0, sig_w^2)
-    w_val = rand(w, n)
-
-    for t in 2:n
-        x[t] = exp(-1 / 36) * x[t-1] + w_val[t]
-    end
-
-    return x
 end
 
 function AR_one_step(x_old, sig_w)
@@ -273,7 +268,7 @@ function AR_one_step(x_old, sig_w)
     return x_new
 end
 
-function simulate_enkf()
+function simulate_enkf(n_ensemble=50, type)
     # for plots
     # locations of observations
     s = settings()
@@ -296,44 +291,64 @@ function simulate_enkf()
     s["ilocs"] = ilocs
     s["loc_names"] = loc_names
 
-    #load observations
-    (obs_times, obs_values) = read_series("tide_cadzand.txt")
-    observed_data = zeros(Float64, length(ilocs), length(obs_times))
-    observed_data[1, :] = obs_values[:]
-    (obs_times, obs_values) = read_series("tide_vlissingen.txt")
-    observed_data[2, :] = obs_values[:]
-    (obs_times, obs_values) = read_series("tide_terneuzen.txt")
-    observed_data[3, :] = obs_values[:]
-    (obs_times, obs_values) = read_series("tide_hansweert.txt")
-    observed_data[4, :] = obs_values[:]
-    (obs_times, obs_values) = read_series("tide_bath.txt")
-    observed_data[5, :] = obs_values[:]
+    if type ∈ ["enkf", "real_ass"]
+        #load observations
+        (obs_times, obs_values) = read_series("tide_cadzand.txt")
+        observed_data = zeros(Float64, length(ilocs), length(obs_times))
+        observed_data[1, :] = obs_values[:]
+        (obs_times, obs_values) = read_series("tide_vlissingen.txt")
+        observed_data[2, :] = obs_values[:]
+        (obs_times, obs_values) = read_series("tide_terneuzen.txt")
+        observed_data[3, :] = obs_values[:]
+        (obs_times, obs_values) = read_series("tide_hansweert.txt")
+        observed_data[4, :] = obs_values[:]
+        (obs_times, obs_values) = read_series("tide_bath.txt")
+        observed_data[5, :] = obs_values[:]
+
+        X_observe = zeros(Float64, length(ilocs), length(obs_times))
+    else if type ∈ ["sim_ass"]
+        observed_data = load("data/observed_data.jld2")["observed_data"]
+    end
 
     (x, t0) = initialize_enfk(s)
     # initialize ensemble
-    X = zeros(Float64, length(x), 50)
-    for i = 1:50
+
+    X = zeros(Float64, length(x), n_ensemble)
+    for i = 1:n_ensemble
         X[:, i] = x
     end
 
     t = s["t"]
     times = s["times"]
     series_data = zeros(Float64, length(ilocs), length(t))
+    X_data = zeros(Float64, length(x), length(t), n_ensemble)
     nt = length(t)
+
     for i = 1:nt
         println("timestep $(i), $(round(i/nt*100,digits=1)) %")
-        X = timestep_enkf(X, i, observed_data[:, i], s)
+        X, x_observe = timestep_enkf(X, i, observed_data[2:5, i], s, is_twin)
         if plot_maps == true
             plot_state(x, i, s) #Show spatial plot. 
             #Very instructive, but turn off for production
         end
+
+        if is_twin
+            X_observe[:, i] = x_observe
+        end
+
+
         series_data[:, i] = mean(X[ilocs, :], dims=2)[:]
+        X_data[:, i, :] = X
+    end
+
+    if is_twin
+        # Save the data for the twin experiment
+        # save("data/observed_data.jld2", "observed_data", X_observe)
     end
 
 
-
     #plot timeseries
-    plot_series(t, series_data, s, observed_data)
+    plot_series_enkf(t, X_data, series_data, s, observed_data)
 
     println("ALl figures have been saved to files.")
     if plot_maps == false
@@ -343,8 +358,43 @@ function simulate_enkf()
         println("This will make the computation much faster.")
     end
 
-    return series_data, observed_data, s
+    return series_data, observed_data, X_data, s
 end
+
+
+
+
+
+
+series_data, observed_data, X_data, s = simulate_enkf(50, "enkf")
+
+function plot_state_for_gif(X_data, s, observed_data)
+    x = mean(X_data, dims=2)[:]
+    #plot all waterlevels and velocities at one time
+    xh = 0.001 * s["x_h"]
+    p1 = plot(xh, X_data[1:2:end-1, :], ylabel="h", ylims=(-3.0, 5.0), xlabel="x [km]", legend=false)
+    # errorline!(p1, xh, X_data[1:2:end-1, :], errorstyle=:ribbon, color=:blue)
+    scatter!(p1, s["xlocs_waterlevel"] ./ 1000, observed_data[1:5])
+
+    xu = 0.001 * s["x_u"]
+    p2 = plot(xu, X_data[2:2:end-1, :], ylabel="u", ylims=(-2.0, 3.0), xlabel="x [km]", legend=false)
+    # errorline!(p2, xu, X_data[2:2:end], errorstyle=:ribbon, color=:blue)
+    p = plot(p1, p2, layout=(2, 1))
+
+    return p
+end
+
+anim = @animate for i ∈ 1:length(s["t"])
+    plot_state_for_gif(X_data[:, i, :], s, observed_data[:, i])
+end
+
+
+gif(anim, "figures/animation_enkf.gif", fps=15)
+
+
+
+
+
 
 
 
@@ -407,12 +457,6 @@ function peak_statistic(model_data, observed_data)
     # Modify this for more advanced error statistics
     return amplitude_error, timing_error
 end
-
-
-
-
-series_data, observed_data, s = simulate_enkf()
-
 
 # ##### Q3: Error statistics
 # error_stats = DataFrame(
