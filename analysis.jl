@@ -85,3 +85,8 @@ p4 = heatmap(is_between_matrix_sim_ass,
 
 p5 = plot(p3, p4, layout=(2,1), dpi=1000)
 savefig(p5, "figures/q6_ensemble_capture.png")
+
+p6 = plot(sum(is_between_matrix_enkf, dims=2)./2.88, label="Real Assimilation", ylabel="% covered", xticks=(collect(1:length(ilocs)), loc_names), dpi=1000)
+plot!(p6, sum(is_between_matrix_sim_ass, dims=2)./2.88, label="Synthetic Assimilation")
+title!("Ensemble cover of measurement")
+savefig(p6, "figures/q6_ensemble_cover_summary.png")
