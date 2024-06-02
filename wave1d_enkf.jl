@@ -361,15 +361,6 @@ function simulate_enkf(n_ensemble, type)
     return series_data, observed_data, X_data, s
 end
 
-
-
-
-type = "sim_ass"
-
-series_data, observed_data, X_data, s = simulate_enkf(50, type)
-
-@save "data/X_data_$(type).jdl2" X_data
-
 function plot_state_for_gif(X_data, s, observed_data)
     x = mean(X_data, dims=2)[:]
     #plot all waterlevels and velocities at one time
@@ -386,12 +377,20 @@ function plot_state_for_gif(X_data, s, observed_data)
     return p
 end
 
-anim = @animate for i ∈ 1:length(s["t"])
-    plot_state_for_gif(X_data[:, i, :], s, observed_data[:, i])
-end
+
+type = "sim_ass"
+
+series_data, observed_data, X_data, s = simulate_enkf(50, type)
+
+@save "data/X_data_$(type).jdl2" X_data
 
 
-gif(anim, "figures/animation_$(type).gif", fps=15)
+# anim = @animate for i ∈ 1:length(s["t"])
+#     plot_state_for_gif(X_data[:, i, :], s, observed_data[:, i])
+# end
+
+
+# gif(anim, "figures/animation_$(type).gif", fps=15)
 
 
 
