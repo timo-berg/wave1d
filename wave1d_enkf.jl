@@ -348,7 +348,7 @@ function simulate_enkf(n_ensemble, type)
 
 
     #plot timeseries
-    plot_series_enkf(t, X_data, series_data, s, observed_data, type)
+    # plot_series_enkf(t, X_data, series_data, s, observed_data, type)
 
     println("ALl figures have been saved to files.")
     if plot_maps == false
@@ -378,11 +378,26 @@ function plot_state_for_gif(X_data, s, observed_data)
 end
 
 
-type = "sim_ass"
 
-series_data, observed_data, X_data, s = simulate_enkf(50, type)
+for n_ensemble ∈ [5, 10, 20, 50, 100]
+    type = "sim_ass"
+    series_data, observed_data, X_data, s = simulate_enkf(n_ensemble, type)
 
-@save "data/X_data_$(type).jdl2" X_data
+    @save "data/X_data_$(type)_$(n_ensemble).jld2" X_data
+
+    anim = @animate for i ∈ 1:length(s["t"])
+        plot_state_for_gif(X_data[:, i, :], s, observed_data[:, i])
+    end
+
+
+    gif(anim, "figures/animation_$(type)_$(n_ensemble).gif", fps=15)
+end
+
+# type = "sim_ass"
+
+# series_data, observed_data, X_data, s = simulate_enkf(50, type)
+
+# @save "data/X_data_$(type).jdl2" X_data
 
 
 # anim = @animate for i ∈ 1:length(s["t"])
