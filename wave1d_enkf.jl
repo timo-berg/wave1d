@@ -184,7 +184,7 @@ function initialize_enfk(s) #return (x,t) at initial time
     return (x, t[1])
 end
 
-function timestep_enkf(X, t_idx, observations, settings, is_twin)
+function timestep_enkf(X, t_idx, observations, settings, type)
     # Random noise
     sig_w = 0.2 #0.3224
     w = Normal(0, sig_w^2)
@@ -200,7 +200,13 @@ function timestep_enkf(X, t_idx, observations, settings, is_twin)
     X[end, :] .+= w_vals # Add noise
 
     rhs = B * X
-    rhs[1, :] .+= settings["h_left"][t_idx] #left boundary
+    if type ∈ ["new_bc"]
+        # rhs[1, :] .+= mean(X[1, :]) #ensemble mean
+        # rhs[1,:] .+= X[1, :] #first ensemble member
+        rhs[1, :] .+= rand(w, 1) #random noise
+    else
+        rhs[1, :] .+= settings["h_left"][t_idx] #left boundary
+    end
 
     for i in axes(X, 2)
         X[:, i] = A \ rhs[:, i]
@@ -217,7 +223,7 @@ function timestep_enkf(X, t_idx, observations, settings, is_twin)
     # Measurement update
     K = P * H' * inv(H * P * H' + R)
 
-    if type ∈ ["enkf", "sim_ass"]
+    if type ∈ ["enkf", "sim_ass", "new_bc"]
         X = X + K * (observations .- H * X)
     end
 
@@ -306,7 +312,7 @@ function simulate_enkf(n_ensemble, type)
         observed_data[5, :] = obs_values[:]
 
         X_observe = zeros(Float64, length(ilocs), length(obs_times))
-    elseif type ∈ ["sim_ass"]
+    elseif type ∈ ["sim_ass", "new_bc"]
         observed_data = load("data/observed_data.jld2")["observed_data"]
     end
 
@@ -348,7 +354,7 @@ function simulate_enkf(n_ensemble, type)
 
 
     #plot timeseries
-    # plot_series_enkf(t, X_data, series_data, s, observed_data, type)
+    plot_series_enkf(t, X_data, series_data, s, observed_data, type)
 
     println("ALl figures have been saved to files.")
     if plot_maps == false
@@ -379,8 +385,8 @@ end
 
 
 
-for n_ensemble ∈ [5, 10, 20, 50, 100]
-    type = "sim_ass"
+for n_ensemble ∈ [50]#[5, 10, 20, 50, 100]
+    type = "new_bc"
     series_data, observed_data, X_data, s = simulate_enkf(n_ensemble, type)
 
     @save "data/X_data_$(type)_$(n_ensemble).jld2" X_data
