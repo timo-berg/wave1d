@@ -25,8 +25,8 @@ end
 function compute_rmse_bias(series_data, observed_data)
     error = series_data .- observed_data
 
-    rmse = sqrt(mean(error[1:5, :] .^ 2))
-    bias = mean(error[1:5, :])
+    rmse = sqrt(mean(error .^ 2))
+    bias = mean(error)
 
     return (rmse, bias)
 end

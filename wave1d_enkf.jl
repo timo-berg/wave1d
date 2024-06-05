@@ -97,6 +97,9 @@ function settings()
     s["t_left"] = bound_t
     itp = LinearInterpolation(bound_t, bound_values)
     s["h_left"] = itp(t)
+
+    s["time_cutoff"] = 168 - 130 # 
+
     return s
 end
 
@@ -214,6 +217,10 @@ function timestep_enkf(X, t_idx, observations, settings, type)
 
     x_observe = X[settings["ilocs"], 1]
 
+    if type ∈ ["predict"] && t_idx > settings["time_cutoff"]
+        return X, x_observe
+    end
+
     # Ensemble average
     x_avg = mean(X, dims=2)
 
@@ -223,7 +230,7 @@ function timestep_enkf(X, t_idx, observations, settings, type)
     # Measurement update
     K = P * H' * inv(H * P * H' + R)
 
-    if type ∈ ["enkf", "sim_ass", "new_bc"]
+    if type ∈ ["enkf", "sim_ass", "new_bc", "storm_ass", "predict"]
         X = X + K * (observations .- H * X)
     end
 
@@ -260,6 +267,9 @@ function plot_series_enkf(t, X_data, series_data, s, obs_data, type)
         # errorline!(p, seconds_to_hours .* t, X_data_locs[i, :, :], errorstyle=:ribbon, color=:blue)
         title!(p, loc_names[i])
         xlabel!(p, "time [hours]")
+        if type ∈ ["predict"]
+            vline!(p, [seconds_to_hours * t[s["time_cutoff"]]], color=:red)
+        end
         savefig(p, replace("figures/$(loc_names[i])_$(type).png", " " => "_"))
         sleep(0.05) #Slow down to avoid that that the plotting backend starts complaining. This is a bug and should be fixed soon.
     end
@@ -314,6 +324,19 @@ function simulate_enkf(n_ensemble, type)
         X_observe = zeros(Float64, length(ilocs), length(obs_times))
     elseif type ∈ ["sim_ass", "new_bc"]
         observed_data = load("data/observed_data.jld2")["observed_data"]
+    elseif type ∈ ["storm_ass", "predict"]
+        #load observations
+        (obs_times, obs_values) = read_series("tide_cadzand.txt")
+        observed_data = zeros(Float64, length(ilocs), length(obs_times))
+        observed_data[1, :] = obs_values[:]
+        (obs_times, obs_values) = read_series("waterlevel_vlissingen.txt")
+        observed_data[2, :] = obs_values[:]
+        (obs_times, obs_values) = read_series("waterlevel_terneuzen.txt")
+        observed_data[3, :] = obs_values[:]
+        (obs_times, obs_values) = read_series("waterlevel_hansweert.txt")
+        observed_data[4, :] = obs_values[:]
+        (obs_times, obs_values) = read_series("waterlevel_bath.txt")
+        observed_data[5, :] = obs_values[:]
     end
 
     (x, t0) = initialize_enfk(s)
@@ -384,26 +407,28 @@ function plot_state_for_gif(X_data, s, observed_data)
 end
 
 
+types = ["enkf", "real_ass", "no_ass", "sim_ass", "new_bc", "storm_ass", "predict"]
+
 
 for n_ensemble ∈ [50]#[5, 10, 20, 50, 100]
-    type = "new_bc"
+    type = "predict"
     series_data, observed_data, X_data, s = simulate_enkf(n_ensemble, type)
 
-    @save "data/X_data_$(type)_$(n_ensemble).jld2" X_data
+    @save "data/X_data_$(type)_$(168-s["time_cutoff"]).jld2" X_data
 
-    anim = @animate for i ∈ 1:length(s["t"])
-        plot_state_for_gif(X_data[:, i, :], s, observed_data[:, i])
-    end
+    # anim = @animate for i ∈ 1:length(s["t"])
+    #     plot_state_for_gif(X_data[:, i, :], s, observed_data[:, i])
+    # end
 
 
-    gif(anim, "figures/animation_$(type)_$(n_ensemble).gif", fps=15)
+    # gif(anim, "figures/animation_$(type).gif", fps=15)
 end
 
 # type = "sim_ass"
 
 # series_data, observed_data, X_data, s = simulate_enkf(50, type)
 
-# @save "data/X_data_$(type).jdl2" X_data
+# @save "data/X_data_$(type).jld2" X_data
 
 
 # anim = @animate for i ∈ 1:length(s["t"])

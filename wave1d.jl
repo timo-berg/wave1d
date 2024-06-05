@@ -318,8 +318,8 @@ end
 function compute_rmse_bias(series_data, observed_data)
     error = series_data .- observed_data
 
-    rmse = sqrt(mean(error[1:5, :] .^ 2))
-    bias = mean(error[1:5, :])
+    rmse = sqrt(mean(error .^ 2))
+    bias = mean(error)
 
     return (rmse, bias)
 end
@@ -337,19 +337,28 @@ function peak_statistic(model_data, observed_data)
     peak_min_tolerance = 7
 
     (peak_model_idcs, peak_model_vals, _) = findmaxima(model_data) |> peakproms!() |> peakwidths!(; min=peak_min_tolerance)
-    peak_model_idcs, peak_model_vals = keep_positive(peak_model_idcs, peak_model_vals)
     (peak_obs_idcs, peak_obs_vals, _) = findmaxima(observed_data) |> peakproms!() |> peakwidths!(; min=peak_min_tolerance)
-    peak_obs_idcs, peak_obs_vals = keep_positive(peak_obs_idcs, peak_obs_vals)
 
     (trough_model_idcs, trough_model_vals, _) = findminima(model_data) |> peakproms!() |> peakwidths!(; min=peak_min_tolerance)
-    trough_model_idcs, trough_model_vals = keep_negative(trough_model_idcs, trough_model_vals)
     (trough_obs_idcs, trough_obs_vals, _) = findminima(observed_data) |> peakproms!() |> peakwidths!(; min=peak_min_tolerance)
-    trough_obs_idcs, trough_obs_vals = keep_negative(trough_obs_idcs, trough_obs_vals)
 
     # Error if the number of peaks in the model and observations do not match
-    if length(peak_model_idcs) != length(peak_obs_idcs) || length(trough_model_idcs) != length(trough_obs_idcs)
-        error("The number of peaks or troughs in the model and observations do not match.")
+    if length(peak_model_idcs) > length(peak_obs_idcs)
+        peak_model_idcs = peak_model_idcs[1:length(peak_obs_idcs)]
+        peak_model_vals = peak_model_vals[1:length(peak_obs_idcs)]
+    elseif length(peak_model_idcs) < length(peak_obs_idcs)
+        peak_obs_idcs = peak_obs_idcs[1:length(peak_model_idcs)]
+        peak_obs_vals = peak_obs_vals[1:length(peak_model_idcs)]
     end
+
+    if length(trough_model_idcs) > length(trough_obs_idcs)
+        trough_model_idcs = trough_model_idcs[1:length(trough_obs_idcs)]
+        trough_model_vals = trough_model_vals[1:length(trough_obs_idcs)]
+    elseif length(trough_model_idcs) < length(trough_obs_idcs)
+        trough_obs_idcs = trough_obs_idcs[1:length(trough_model_idcs)]
+        trough_obs_vals = trough_obs_vals[1:length(trough_model_idcs)]
+    end
+
 
     # Compute the error statistics
     amplitude_errors = [abs.(peak_model_vals .- peak_obs_vals); abs.(trough_model_vals .- trough_obs_vals)]
@@ -391,6 +400,7 @@ for i = 1:5
     error_stats[i, :Timing_Std] = round(timing_error.std, digits=2)
 end
 
+latexify(error_stats, env=:table, latex=false)
 
 
 ##### Q4: Simulate Noise
@@ -435,11 +445,10 @@ bias_df = DataFrame(
 )
 bias_long_df = stack(bias_df, [:Cadzand, :Vlissingen, :Terneuzen, :Hansweert, :Bath])
 
-plotlyjs()
-p = violin(RMSE_long_df[!, :variable], RMSE_long_df[!, :value], title="RMSE", ylabel="RMSE", xlabel="Location", legend=false, xdiscrete_values=["Cadzand", "Vlissingen", "Terneuzen", "Hansweert", "Bath"], alpha=0.5, dpi=1000)
-savefig(p, "figures/RMSE_violin.svg")
-p = violin(bias_long_df[!, :variable], bias_long_df[!, :value], title="Bias", ylabel="Bias", xlabel="Location", legend=false, xdiscrete_values=["Cadzand", "Vlissingen", "Terneuzen", "Hansweert", "Bath"], alpha=0.5)
-savefig(p, "figures/Bias_violin.eps")
+p = violin(RMSE_long_df[!, :variable], RMSE_long_df[!, :value], title="RMSE of the ensemble", ylabel="RMSE [m]", xlabel="Location", legend=false, xdiscrete_values=["Cadzand", "Vlissingen", "Terneuzen", "Hansweert", "Bath"], alpha=0.5, dpi=1000)
+savefig(p, "figures/q4_RMSE_violin.png")
+p = violin(bias_long_df[!, :variable], bias_long_df[!, :value], title="Bias of the ensemble", ylabel="Bias [m]", xlabel="Location", legend=false, xdiscrete_values=["Cadzand", "Vlissingen", "Terneuzen", "Hansweert", "Bath"], alpha=0.5, dpi=1000)
+savefig(p, "figures/q4_Bias_violin.png")
 
 for i = 1:5
     p = errorline(1:288, series_data_noise[i, :, :], errorstyle=:ribbon, label="Ensemble Average", color=:blue)
@@ -474,4 +483,15 @@ for i = 1:5
     error_stats[i, :Timing_Std] = round(timing_error.std, digits=2)
 end
 
+ensemble_stats = vcat(mapcols(col -> round(mean(col),digits=2), RMSE_df),
+mapcols(col -> round(std(col),digits=2), RMSE_df),
+mapcols(col -> round(mean(col),digits=2), bias_df),
+mapcols(col -> round(std(col),digits=2), bias_df))
+
+
+ensemble_stats = DataFrame([[names(ensemble_stats)]; collect.(eachrow(ensemble_stats))], [:column; Symbol.(axes(ensemble_stats, 1))])
+rename!(ensemble_stats,["Location", "Mean RMSE", "Std RMSE", "Mean Bias", "Std Bias"])
+
+
+latexify(ensemble_stats, env=:table, latex=false)
 latexify(error_stats, env=:table, latex=false)
