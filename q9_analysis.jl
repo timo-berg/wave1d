@@ -4,6 +4,7 @@ using JLD2
 using Statistics
 using Peaks
 using Plots
+using DSP
 
 struct stats #statistics of peaks
     mean::Float64
@@ -83,7 +84,7 @@ end
 observed_data_chill = load("data/observed_data_real.jld2")["observed_data"]
 observed_data_storm = load("data/observed_data_storm.jld2")["observed_data"]
 X_data_no_ass = load("data/X_data_no_ass.jdl2")["X_data"]
-X_data_storm_ass = load("data/X_data_storm_ass_50.jld2")["X_data"]
+X_data_storm_ass = load("data/X_data_storm_ass.jld2")["X_data"]
 ilocs = [1, 51, 101, 151, 199]
 
 ensemble_mean_no_ass = mean(X_data_no_ass[ilocs, :, :], dims=3)
@@ -104,10 +105,10 @@ error_stats = DataFrame(
 )
 
 
-for i = 1:5
+for i = 2:5
     # smoothing the data
     ensemble_mean_smooth = filtfilt(ones(10) / 10, ensemble_mean_storm_ass[i, :, 1])
-    observed_data_smooth = filtfilt(ones(10) / 10, observed_data_storm[i, 2:end])
+    observed_data_smooth = filtfilt(ones(10) / 10, observed_data_storm[i, 1:end-1])
 
     amplitude_error, timing_error = peak_statistic(ensemble_mean_smooth, observed_data_smooth)
     rmse, bias = compute_rmse_bias(ensemble_mean_smooth, observed_data_smooth)
@@ -122,10 +123,13 @@ end
 
 error_stats_storm = deepcopy(error_stats)
 
-for i = 1:5
+# Drop Cadzand
+delete!(error_stats_storm, 1)
+
+for i = 2:5
     # smoothing the data
     ensemble_mean_smooth = filtfilt(ones(10) / 10, ensemble_mean_no_ass[i, :, 1])
-    observed_data_smooth = filtfilt(ones(10) / 10, observed_data_storm[i, 2:end])
+    observed_data_smooth = filtfilt(ones(10) / 10, observed_data_storm[i, 1:end-1])
 
     amplitude_error, timing_error = peak_statistic(ensemble_mean_smooth, observed_data_smooth)
     rmse, bias = compute_rmse_bias(ensemble_mean_smooth, observed_data_smooth)
@@ -139,59 +143,21 @@ for i = 1:5
 end
 
 error_stats_no_ass = deepcopy(error_stats)
+delete!(error_stats_no_ass, 1)
 
 
-latexify(error_stats, env=:table, latex=false)
-
-
-
-loc_idx = 5
-
-model_data = filtfilt(ones(10) / 10, ensemble_mean_storm_ass[loc_idx, :, 1])
-observed_data = filtfilt(ones(10) / 10, observed_data_storm[loc_idx, 2:end])
-
-peak_min_tolerance = 7
-
-(peak_model_idcs, peak_model_vals, _) = findmaxima(model_data) |> peakproms!() |> peakwidths!(; min=peak_min_tolerance)
-(peak_obs_idcs, peak_obs_vals, _) = findmaxima(observed_data) |> peakproms!() |> peakwidths!(; min=peak_min_tolerance)
-
-(trough_model_idcs, trough_model_vals, _) = findminima(model_data) |> peakproms!() |> peakwidths!(; min=peak_min_tolerance)
-(trough_obs_idcs, trough_obs_vals, _) = findminima(observed_data) |> peakproms!() |> peakwidths!(; min=peak_min_tolerance)
-
-# Error if the number of peaks in the model and observations do not match
-if length(peak_model_idcs) > length(peak_obs_idcs)
-    peak_model_idcs = peak_model_idcs[1:length(peak_obs_idcs)]
-    peak_model_vals = peak_model_vals[1:length(peak_obs_idcs)]
-elseif length(peak_model_idcs) < length(peak_obs_idcs)
-    peak_obs_idcs = peak_obs_idcs[1:length(peak_model_idcs)]
-    peak_obs_vals = peak_obs_vals[1:length(peak_model_idcs)]
-end
-
-if length(trough_model_idcs) > length(trough_obs_idcs)
-    trough_model_idcs = trough_model_idcs[1:length(trough_obs_idcs)]
-    trough_model_vals = trough_model_vals[1:length(trough_obs_idcs)]
-elseif length(trough_model_idcs) < length(trough_obs_idcs)
-    trough_obs_idcs = trough_obs_idcs[1:length(trough_model_idcs)]
-    trough_obs_vals = trough_obs_vals[1:length(trough_model_idcs)]
-end
-
-plot(model_data, label="Model Data")
-plot!(observed_data, label="Observed Data")
-scatter!(peak_model_idcs, peak_model_vals, label="Model Peaks")
-scatter!(peak_obs_idcs, peak_obs_vals, label="Observed Peaks")
-scatter!(trough_model_idcs, trough_model_vals, label="Model Troughs")
-scatter!(trough_obs_idcs, trough_obs_vals, label="Observed Troughs")
+latexify(error_stats_no_ass, env=:table, latex=false)
 
 
 
-# Stats between ensembles and observations chill
-plot(error_stats_storm[!, :Location], error_stats_storm[!, :RMSE], label="RMSE storm", xlabel="Location", ylabel="RMSE", title="RMSE between ensemble and observed data")
-plot!(error_stats_storm[!, :Location], error_stats_no_ass[!, :RMSE], label="RMSE chill")
+# # Stats between ensembles and observations chill
+# plot(error_stats_storm[!, :Location], error_stats_storm[!, :RMSE], label="RMSE storm", xlabel="Location", ylabel="RMSE", title="RMSE between ensemble and observed data")
+# plot!(error_stats_storm[!, :Location], error_stats_no_ass[!, :RMSE], label="RMSE chill")
 
-# Amplitude mean
-plot(error_stats_storm[!, :Location], error_stats_storm[!, :Amplitude_Mean], label="Amplitude storm", xlabel="Location", ylabel="Amplitude Error", title="Amplitude Error between ensemble and observed data")
-plot!(error_stats_storm[!, :Location], error_stats_no_ass[!, :Amplitude_Mean], label="Amplitude chill")
+# # Amplitude mean
+# plot(error_stats_storm[!, :Location], error_stats_storm[!, :Amplitude_Mean], label="Amplitude storm", xlabel="Location", ylabel="Amplitude Error", title="Amplitude Error between ensemble and observed data")
+# plot!(error_stats_storm[!, :Location], error_stats_no_ass[!, :Amplitude_Mean], label="Amplitude chill")
 
-# Timing mean
-plot(error_stats_storm[!, :Location], error_stats_storm[!, :Timing_Mean], label="Timing storm", xlabel="Location", ylabel="RMSE", title="RMSE between ensemble and observed data")
-plot!(error_stats_storm[!, :Location], error_stats_no_ass[!, :Timing_Mean], label="Timing chill")
+# # Timing mean
+# plot(error_stats_storm[!, :Location], error_stats_storm[!, :Timing_Mean], label="Timing storm", xlabel="Location", ylabel="RMSE", title="RMSE between ensemble and observed data")
+# plot!(error_stats_storm[!, :Location], error_stats_no_ass[!, :Timing_Mean], label="Timing chill")

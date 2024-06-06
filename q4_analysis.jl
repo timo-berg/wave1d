@@ -107,7 +107,7 @@ error_stats = DataFrame(
 for i = 1:5
     # smoothing the data
     ensemble_mean_smooth = filtfilt(ones(10) / 10, ensemble_mean_no_ass[i, :, 1])
-    observed_data_smooth = filtfilt(ones(10) / 10, observed_data_storm[i, 2:end])
+    observed_data_smooth = filtfilt(ones(10) / 10, observed_data_storm[i, 1:end-1])
 
     amplitude_error, timing_error = peak_statistic(ensemble_mean_smooth, observed_data_smooth)
     rmse, bias = compute_rmse_bias(ensemble_mean_smooth, observed_data_smooth)
@@ -129,9 +129,9 @@ p = plot(xlabel="Time [h]", ylabel="Waterlevel [m]", title="Standard deviation o
 for i ∈ eachindex(ilocs)
     variances = std(X_data_no_ass[ilocs[i], :, :], dims=2)
     variances = filtfilt(ones(5) / 5, variances)
-    plot!(p, 1/3600 .* s["t"], variances, label=loc_names[i])
+    plot!(p, 1 / 3600 .* s["t"], variances, label=loc_names[i])
 end
-plot(p, legend=:outerbottomright, legend_title="Location", size=(600,400), dpi=1000)
+p = plot(p, legend=:outerbottomright, legend_title="Location", size=(600, 400), dpi=1000)
 savefig(p, "figures/q4_std_ensemble_time.png")
 
 times = Int.(round.(LinRange(2, 288, 4)))
@@ -144,9 +144,9 @@ p = plot(xlabel="Distance [m]", ylabel="Waterlevel [m]", title="Standard deviati
 for i ∈ eachindex(times)
     variances = std(X_data_no_ass[1:2:end, times[i], :], dims=2)
     variances = filtfilt(ones(5) / 5, variances)
-    plot!(p, variances, label=1/60 * s["t"][times[i]], color=colors[i])
+    plot!(p, variances, label=1 / 60 * s["t"][times[i]], color=colors[i])
 end
-plot(p, legend=:outerbottomright, legend_title="Time [min]", size=(600,400))
+p = plot(p, legend=:outerbottomright, legend_title="Time [min]", size=(600, 400))
 savefig(p, "figures/q4_std_ensemble_space.png")
 
 

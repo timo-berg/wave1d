@@ -54,22 +54,22 @@ function peak_statistic(model_data, observed_data)
     trough_obs_idcs, trough_obs_vals = keep_negative(trough_obs_idcs, trough_obs_vals)
 
     # Error if the number of peaks in the model and observations do not match
-    if length(peak_model_idcs) > length(peak_obs_idcs) 
+    if length(peak_model_idcs) > length(peak_obs_idcs)
         peak_model_idcs = peak_model_idcs[1:length(peak_obs_idcs)]
         peak_model_vals = peak_model_vals[1:length(peak_obs_idcs)]
     elseif length(peak_model_idcs) < length(peak_obs_idcs)
         peak_obs_idcs = peak_obs_idcs[1:length(peak_model_idcs)]
         peak_obs_vals = peak_obs_vals[1:length(peak_model_idcs)]
     end
-    
-    if length(trough_model_idcs) > length(trough_obs_idcs) 
+
+    if length(trough_model_idcs) > length(trough_obs_idcs)
         trough_model_idcs = trough_model_idcs[1:length(trough_obs_idcs)]
         trough_model_vals = trough_model_vals[1:length(trough_obs_idcs)]
     elseif length(trough_model_idcs) < length(trough_obs_idcs)
         trough_obs_idcs = trough_obs_idcs[1:length(trough_model_idcs)]
         trough_obs_vals = trough_obs_vals[1:length(trough_model_idcs)]
     end
-    
+
 
     # Compute the error statistics
     amplitude_errors = [abs.(peak_model_vals .- peak_obs_vals); abs.(trough_model_vals .- trough_obs_vals)]
@@ -88,7 +88,7 @@ observed_data = load("data/observed_data.jld2")["observed_data"]
 X_data = load("data/X_data_new_bc_50.jld2")["X_data"]
 ilocs = [1, 51, 101, 151, 199]
 
-ensemble_mean = mean(X_data[ilocs,:,:], dims=3)
+ensemble_mean = mean(X_data[ilocs, :, :], dims=3)
 
 
 error_stats = DataFrame(
@@ -105,8 +105,8 @@ error_stats = DataFrame(
 
 for i = 1:5
     # smoothing the data
-    ensemble_mean_smooth = filtfilt(ones(10)/10, ensemble_mean[i, :, 1])
-    observed_data_smooth = filtfilt(ones(10)/10, observed_data[i, 2:end])
+    ensemble_mean_smooth = filtfilt(ones(10) / 10, ensemble_mean[i, :, 1])
+    observed_data_smooth = filtfilt(ones(10) / 10, observed_data[i, 1:end-1])
 
     amplitude_error, timing_error = peak_statistic(ensemble_mean_smooth, observed_data_smooth)
     rmse, bias = compute_rmse_bias(ensemble_mean_smooth, observed_data_smooth)

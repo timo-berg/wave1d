@@ -98,7 +98,7 @@ function settings()
     itp = LinearInterpolation(bound_t, bound_values)
     s["h_left"] = itp(t)
 
-    s["time_cutoff"] = 168 - 130 # 
+    s["time_cutoff"] = 168 - 0 # [0, 3, 6, 9, 12, 15, 18, 21, 24, 27, 30, 33, 36, 39] 
 
     return s
 end
@@ -230,7 +230,7 @@ function timestep_enkf(X, t_idx, observations, settings, type)
     # Measurement update
     K = P * H' * inv(H * P * H' + R)
 
-    if type ∈ ["enkf", "sim_ass", "new_bc", "storm_ass", "predict"]
+    if type ∈ ["enkf", "sim_ass", "new_bc", "storm_ass", "predict", "new_ic"]
         X = X + K * (observations .- H * X)
     end
 
@@ -258,15 +258,15 @@ function plot_series_enkf(t, X_data, series_data, s, obs_data, type)
     # plot timeseries from model and observations
     loc_names = s["loc_names"]
     nseries = length(loc_names)
-    for i = 1:nseries
+    for i = 1:5
         #fig=PyPlot.figure(i+1)
         std_X = std(X_data_locs[i, :, :], dims=2)
-        p = plot(seconds_to_hours .* t, series_data[i, :], ribbon=std_X, linecolor=:blue, label=["model"])
+        p = plot(seconds_to_hours .* t, series_data[i, :], ribbon=std_X, linecolor=:blue, label="model")
         ntimes = min(length(t), size(obs_data, 2))
-        plot!(p, seconds_to_hours .* t[1:ntimes], obs_data[i, 1:ntimes], linecolor=:black, legend=false)
-        # errorline!(p, seconds_to_hours .* t, X_data_locs[i, :, :], errorstyle=:ribbon, color=:blue)
+        plot!(p, seconds_to_hours .* t[1:ntimes], obs_data[i, 1:ntimes], linecolor=:black, label="measured")
         title!(p, loc_names[i])
-        xlabel!(p, "time [hours]")
+        xlabel!(p, "Time [hours]")
+        ylabel!(p, "Water level [m]")
         if type ∈ ["predict"]
             vline!(p, [seconds_to_hours * t[s["time_cutoff"]]], color=:red)
         end
@@ -322,8 +322,8 @@ function simulate_enkf(n_ensemble, type)
         observed_data[5, :] = obs_values[:]
 
         X_observe = zeros(Float64, length(ilocs), length(obs_times))
-    elseif type ∈ ["sim_ass", "new_bc"]
-        observed_data = load("data/observed_data.jld2")["observed_data"]
+    elseif type ∈ ["sim_ass", "new_bc", "new_ic"]
+        observed_data = load("data/observed_data_sim.jld2")["observed_data"]
     elseif type ∈ ["storm_ass", "predict"]
         #load observations
         (obs_times, obs_values) = read_series("tide_cadzand.txt")
@@ -340,6 +340,12 @@ function simulate_enkf(n_ensemble, type)
     end
 
     (x, t0) = initialize_enfk(s)
+
+    if type ∈ ["new_ic"]
+        x_len = length(x)
+
+        x = 2 .* sin.((1:x_len) * 2 * pi / x_len)
+    end
     # initialize ensemble
 
     X = zeros(Float64, length(x), n_ensemble)
@@ -372,7 +378,7 @@ function simulate_enkf(n_ensemble, type)
 
     if type ∈ ["no_ass"]
         # Save the data for the twin experiment
-        save("data/observed_data.jld2", "observed_data", X_observe)
+        save("data/observed_data_sim.jld2", "observed_data", X_observe)
     end
 
 
@@ -407,17 +413,17 @@ function plot_state_for_gif(X_data, s, observed_data)
 end
 
 
-types = ["enkf", "real_ass", "no_ass", "sim_ass", "new_bc", "storm_ass", "predict"]
+types = ["enkf", "no_ass", "sim_ass", "new_bc", "storm_ass", "predict", "new_ic"]
 
 
 for n_ensemble ∈ [50]#[5, 10, 20, 50, 100]
     type = "predict"
     series_data, observed_data, X_data, s = simulate_enkf(n_ensemble, type)
 
-    @save "data/X_data_$(type)_$(168-s["time_cutoff"]).jld2" X_data
+    @save "data/X_data_$(type)_$(168-s["time_cutoff"]).jld2" X_data #_$(168-s["time_cutoff"])
 
     # anim = @animate for i ∈ 1:length(s["t"])
-    #     plot_state_for_gif(X_data[:, i, :], s, observed_data[:, i])
+    #     plot_state_for_gif(X_data[:, i, :], s, observed_data[:, i+1])
     # end
 
 
@@ -437,179 +443,3 @@ end
 
 
 # gif(anim, "figures/animation_$(type).gif", fps=15)
-
-
-
-
-
-
-
-
-
-function compute_peak_statistic(series_data, observed_data, s)
-    nseries = length(s["loc_names"])
-
-    # Find the peaks in the series data
-    for i = 1:5
-        amplitude_error, timing_error = peak_statistic(series_data[i, :], observed_data[i, :])
-        println("Location: $(s["loc_names"][i])")
-        println("Amplitude error:\n μ: $(amplitude_error.mean), σ: $(amplitude_error.std)")
-        println("Mean timing error [min]:\n μ:$(timing_error.mean * s["dt"] / 60), σ: $(timing_error.std * s["dt"] / 60)")
-    end
-end
-
-function compute_rmse_bias(series_data, observed_data)
-    error = series_data .- observed_data
-
-    rmse = sqrt(mean(error[1:5, :] .^ 2))
-    bias = mean(error[1:5, :])
-
-    return (rmse, bias)
-end
-
-function keep_positive(idcs, arr)
-    return idcs[arr.>=0], arr[arr.>=0]
-end
-
-function keep_negative(idcs, arr)
-    return idcs[arr.<=0], arr[arr.<=0]
-end
-
-
-function peak_statistic(model_data, observed_data)
-    peak_min_tolerance = 7
-
-    (peak_model_idcs, peak_model_vals, _) = findmaxima(model_data) |> peakproms!() |> peakwidths!(; min=peak_min_tolerance)
-    peak_model_idcs, peak_model_vals = keep_positive(peak_model_idcs, peak_model_vals)
-    (peak_obs_idcs, peak_obs_vals, _) = findmaxima(observed_data) |> peakproms!() |> peakwidths!(; min=peak_min_tolerance)
-    peak_obs_idcs, peak_obs_vals = keep_positive(peak_obs_idcs, peak_obs_vals)
-
-    (trough_model_idcs, trough_model_vals, _) = findminima(model_data) |> peakproms!() |> peakwidths!(; min=peak_min_tolerance)
-    trough_model_idcs, trough_model_vals = keep_negative(trough_model_idcs, trough_model_vals)
-    (trough_obs_idcs, trough_obs_vals, _) = findminima(observed_data) |> peakproms!() |> peakwidths!(; min=peak_min_tolerance)
-    trough_obs_idcs, trough_obs_vals = keep_negative(trough_obs_idcs, trough_obs_vals)
-
-    # Error if the number of peaks in the model and observations do not match
-    if length(peak_model_idcs) != length(peak_obs_idcs) || length(trough_model_idcs) != length(trough_obs_idcs)
-        error("The number of peaks or troughs in the model and observations do not match.")
-    end
-
-    # Compute the error statistics
-    amplitude_errors = [abs.(peak_model_vals .- peak_obs_vals); abs.(trough_model_vals .- trough_obs_vals)]
-    timing_errors = [abs.(peak_model_idcs .- peak_obs_idcs); abs.(trough_model_idcs .- trough_obs_idcs)] .* 10 # Convert to minutes
-
-    amplitude_error = stats(round(mean(amplitude_errors), digits=5), round(std(amplitude_errors), digits=5))
-    timing_error = stats(round(mean(timing_errors), digits=5), round(std(timing_errors), digits=5))
-
-    # Modify this for more advanced error statistics
-    return amplitude_error, timing_error
-end
-
-# ##### Q3: Error statistics
-# error_stats = DataFrame(
-#     Location=["Cadzand", "Vlissingen", "Terneuzen", "Hansweert", "Bath"],
-#     RMSE=zeros(Float64, 5),
-#     Bias=zeros(Float64, 5),
-#     Amplitude_Mean=zeros(Float64, 5),
-#     Amplitude_Std=zeros(Float64, 5),
-#     Timing_Mean=zeros(Float64, 5),
-#     Timing_Std=zeros(Float64, 5)
-# )
-
-
-# for i = 1:5
-#     amplitude_error, timing_error = peak_statistic(series_data[i, :], observed_data[i, 2:end])
-#     rmse, bias = compute_rmse_bias(series_data[i, :], observed_data[i, 2:end])
-
-#     error_stats[i, :RMSE] = round(rmse, digits=2)
-#     error_stats[i, :Bias] = round(bias, digits=2)
-#     error_stats[i, :Amplitude_Mean] = round(amplitude_error.mean, digits=2)
-#     error_stats[i, :Amplitude_Std] = round(amplitude_error.std, digits=2)
-#     error_stats[i, :Timing_Mean] = round(timing_error.mean, digits=2)
-#     error_stats[i, :Timing_Std] = round(timing_error.std, digits=2)
-# end
-
-
-
-# ##### Q4: Simulate Noise
-
-# RMSE = zeros(Float64, (5, 50))
-# Bias = zeros(Float64, (5, 50))
-# Amplitude_Mean = zeros(Float64, (5, 50))
-# Amplitude_Std = zeros(Float64, (5, 50))
-# Timing_Mean = zeros(Float64, (5, 50))
-# Timing_Std = zeros(Float64, (5, 50))
-
-# series_data_no_noise, observed_data_no_noise, s = simulate()
-# series_data_noise = zeros(Float64, (5, 288, 50))
-
-# for run_idx = 1:50
-#     for i = 1:5
-#         # Add noise
-#         series_data_noise[i, :, run_idx] = series_data_no_noise[i, :] .+ AR_one(length(series_data[i, :]), 0.3224)
-
-#         # amplitude_error, timing_error = peak_statistic(series_data[i, :], observed_data[i, 2:end])
-#         rmse, bias = compute_rmse_bias(series_data_noise[i, :, run_idx], observed_data[i, 2:end])
-
-#         RMSE[i, run_idx] = round(rmse, digits=2)
-#         Bias[i, run_idx] = round(bias, digits=2)
-#         # Amplitude_Mean[i, run_idx] = round(amplitude_error.mean, digits=2)
-#         # Amplitude_Std[i, run_idx] = round(amplitude_error.std, digits=2)
-#         # Timing_Mean[i, run_idx] = round(timing_error.mean, digits=2)
-#         # Timing_Std[i, run_idx] = round(timing_error.std, digits=2)
-#     end
-# end
-
-# locations = ["Cadzand", "Vlissingen", "Terneuzen", "Hansweert", "Bath"]
-
-# RMSE_df = DataFrame(
-#     transpose(RMSE),
-#     Symbol.(["Cadzand", "Vlissingen", "Terneuzen", "Hansweert", "Bath"])
-# )
-# RMSE_long_df = stack(RMSE_df, [:Cadzand, :Vlissingen, :Terneuzen, :Hansweert, :Bath])
-# bias_df = DataFrame(
-#     transpose(Bias),
-#     Symbol.(["Cadzand", "Vlissingen", "Terneuzen", "Hansweert", "Bath"])
-# )
-# bias_long_df = stack(bias_df, [:Cadzand, :Vlissingen, :Terneuzen, :Hansweert, :Bath])
-
-# plotlyjs()
-# p = violin(RMSE_long_df[!, :variable], RMSE_long_df[!, :value], title="RMSE", ylabel="RMSE", xlabel="Location", legend=false, xdiscrete_values=["Cadzand", "Vlissingen", "Terneuzen", "Hansweert", "Bath"], alpha=0.5, dpi=1000)
-# savefig(p, "figures/RMSE_violin.svg")
-# p = violin(bias_long_df[!, :variable], bias_long_df[!, :value], title="Bias", ylabel="Bias", xlabel="Location", legend=false, xdiscrete_values=["Cadzand", "Vlissingen", "Terneuzen", "Hansweert", "Bath"], alpha=0.5)
-# savefig(p, "figures/Bias_violin.eps")
-
-# for i = 1:5
-#     p = errorline(1:288, series_data_noise[i, :, :], errorstyle=:ribbon, label="Ensemble Average", color=:blue)
-#     plot!(p, observed_data[i, 2:end], linecolor=:black, label="Observed Data")
-#     title!(p, locations[i])
-#     display(p)
-#     savefig(p, "figures/ensemble_avg_$(locations[i]).png")
-# end
-
-# avg_noise_data = mean(series_data_noise, dims=3)
-
-# error_stats = DataFrame(
-#     Location=["Cadzand", "Vlissingen", "Terneuzen", "Hansweert", "Bath"],
-#     RMSE=zeros(Float64, 5),
-#     Bias=zeros(Float64, 5),
-#     Amplitude_Mean=zeros(Float64, 5),
-#     Amplitude_Std=zeros(Float64, 5),
-#     Timing_Mean=zeros(Float64, 5),
-#     Timing_Std=zeros(Float64, 5)
-# )
-
-
-# for i = 1:5
-#     amplitude_error, timing_error = peak_statistic(avg_noise_data[i, :, 1], observed_data[i, 2:end])
-#     rmse, bias = compute_rmse_bias(avg_noise_data[i, :, 1], observed_data[i, 2:end])
-
-#     error_stats[i, :RMSE] = round(rmse, digits=2)
-#     error_stats[i, :Bias] = round(bias, digits=2)
-#     error_stats[i, :Amplitude_Mean] = round(amplitude_error.mean, digits=2)
-#     error_stats[i, :Amplitude_Std] = round(amplitude_error.std, digits=2)
-#     error_stats[i, :Timing_Mean] = round(timing_error.mean, digits=2)
-#     error_stats[i, :Timing_Std] = round(timing_error.std, digits=2)
-# end
-
-# latexify(error_stats, env=:table, latex=false)

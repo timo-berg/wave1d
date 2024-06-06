@@ -194,13 +194,14 @@ function plot_series(t, series_data, s, obs_data)
     # plot timeseries from model and observations
     loc_names = s["loc_names"]
     nseries = length(loc_names)
-    for i = 1:nseries
+    for i = 1:5
         #fig=PyPlot.figure(i+1)
-        p = plot(seconds_to_hours .* t, series_data[i, :], linecolor=:blue, label=["model"])
+        p = plot(seconds_to_hours .* t, series_data[i, :], linecolor=:blue, label="model")
         ntimes = min(length(t), size(obs_data, 2))
-        plot!(p, seconds_to_hours .* t[1:ntimes], obs_data[i, 1:ntimes], linecolor=:black, label=["model", "measured"])
+        plot!(p, seconds_to_hours .* t[1:ntimes], obs_data[i, 1:ntimes], linecolor=:black, label="measured")
         title!(p, loc_names[i])
-        xlabel!(p, "time [hours]")
+        xlabel!(p, "Time [hours]")
+        ylabel!(p, "Water level [m]")
         savefig(p, replace("figures/$(loc_names[i]).png", " " => "_"))
         sleep(0.05) #Slow down to avoid that that the plotting backend starts complaining. This is a bug and should be fixed soon.
     end
@@ -389,8 +390,8 @@ error_stats = DataFrame(
 
 
 for i = 1:5
-    amplitude_error, timing_error = peak_statistic(series_data[i, :], observed_data[i, 2:end])
-    rmse, bias = compute_rmse_bias(series_data[i, :], observed_data[i, 2:end])
+    amplitude_error, timing_error = peak_statistic(series_data[i, :], observed_data[i, 1:end-1])
+    rmse, bias = compute_rmse_bias(series_data[i, :], observed_data[i, 1:end-1])
 
     error_stats[i, :RMSE] = round(rmse, digits=2)
     error_stats[i, :Bias] = round(bias, digits=2)
@@ -402,96 +403,3 @@ end
 
 latexify(error_stats, env=:table, latex=false)
 
-
-##### Q4: Simulate Noise
-
-RMSE = zeros(Float64, (5, 50))
-Bias = zeros(Float64, (5, 50))
-Amplitude_Mean = zeros(Float64, (5, 50))
-Amplitude_Std = zeros(Float64, (5, 50))
-Timing_Mean = zeros(Float64, (5, 50))
-Timing_Std = zeros(Float64, (5, 50))
-
-series_data_no_noise, observed_data_no_noise, s = simulate()
-series_data_noise = zeros(Float64, (5, 288, 50))
-
-for run_idx = 1:50
-    for i = 1:5
-        # Add noise
-        series_data_noise[i, :, run_idx] = series_data_no_noise[i, :] .+ AR_one(length(series_data[i, :]), 0.3224)
-
-        # amplitude_error, timing_error = peak_statistic(series_data[i, :], observed_data[i, 2:end])
-        rmse, bias = compute_rmse_bias(series_data_noise[i, :, run_idx], observed_data[i, 2:end])
-
-        RMSE[i, run_idx] = round(rmse, digits=2)
-        Bias[i, run_idx] = round(bias, digits=2)
-        # Amplitude_Mean[i, run_idx] = round(amplitude_error.mean, digits=2)
-        # Amplitude_Std[i, run_idx] = round(amplitude_error.std, digits=2)
-        # Timing_Mean[i, run_idx] = round(timing_error.mean, digits=2)
-        # Timing_Std[i, run_idx] = round(timing_error.std, digits=2)
-    end
-end
-
-locations = ["Cadzand", "Vlissingen", "Terneuzen", "Hansweert", "Bath"]
-
-RMSE_df = DataFrame(
-    transpose(RMSE),
-    Symbol.(["Cadzand", "Vlissingen", "Terneuzen", "Hansweert", "Bath"])
-)
-RMSE_long_df = stack(RMSE_df, [:Cadzand, :Vlissingen, :Terneuzen, :Hansweert, :Bath])
-bias_df = DataFrame(
-    transpose(Bias),
-    Symbol.(["Cadzand", "Vlissingen", "Terneuzen", "Hansweert", "Bath"])
-)
-bias_long_df = stack(bias_df, [:Cadzand, :Vlissingen, :Terneuzen, :Hansweert, :Bath])
-
-p = violin(RMSE_long_df[!, :variable], RMSE_long_df[!, :value], title="RMSE of the ensemble", ylabel="RMSE [m]", xlabel="Location", legend=false, xdiscrete_values=["Cadzand", "Vlissingen", "Terneuzen", "Hansweert", "Bath"], alpha=0.5, dpi=1000)
-savefig(p, "figures/q4_RMSE_violin.png")
-p = violin(bias_long_df[!, :variable], bias_long_df[!, :value], title="Bias of the ensemble", ylabel="Bias [m]", xlabel="Location", legend=false, xdiscrete_values=["Cadzand", "Vlissingen", "Terneuzen", "Hansweert", "Bath"], alpha=0.5, dpi=1000)
-savefig(p, "figures/q4_Bias_violin.png")
-
-for i = 1:5
-    p = errorline(1:288, series_data_noise[i, :, :], errorstyle=:ribbon, label="Ensemble Average", color=:blue)
-    plot!(p, observed_data[i, 2:end], linecolor=:black, label="Observed Data")
-    title!(p, locations[i])
-    display(p)
-    savefig(p, "figures/ensemble_avg_$(locations[i]).png")
-end
-
-avg_noise_data = mean(series_data_noise, dims=3)
-
-error_stats = DataFrame(
-    Location=["Cadzand", "Vlissingen", "Terneuzen", "Hansweert", "Bath"],
-    RMSE=zeros(Float64, 5),
-    Bias=zeros(Float64, 5),
-    Amplitude_Mean=zeros(Float64, 5),
-    Amplitude_Std=zeros(Float64, 5),
-    Timing_Mean=zeros(Float64, 5),
-    Timing_Std=zeros(Float64, 5)
-)
-
-
-for i = 1:5
-    amplitude_error, timing_error = peak_statistic(avg_noise_data[i, :, 1], observed_data[i, 2:end])
-    rmse, bias = compute_rmse_bias(avg_noise_data[i, :, 1], observed_data[i, 2:end])
-
-    error_stats[i, :RMSE] = round(rmse, digits=2)
-    error_stats[i, :Bias] = round(bias, digits=2)
-    error_stats[i, :Amplitude_Mean] = round(amplitude_error.mean, digits=2)
-    error_stats[i, :Amplitude_Std] = round(amplitude_error.std, digits=2)
-    error_stats[i, :Timing_Mean] = round(timing_error.mean, digits=2)
-    error_stats[i, :Timing_Std] = round(timing_error.std, digits=2)
-end
-
-ensemble_stats = vcat(mapcols(col -> round(mean(col),digits=2), RMSE_df),
-mapcols(col -> round(std(col),digits=2), RMSE_df),
-mapcols(col -> round(mean(col),digits=2), bias_df),
-mapcols(col -> round(std(col),digits=2), bias_df))
-
-
-ensemble_stats = DataFrame([[names(ensemble_stats)]; collect.(eachrow(ensemble_stats))], [:column; Symbol.(axes(ensemble_stats, 1))])
-rename!(ensemble_stats,["Location", "Mean RMSE", "Std RMSE", "Mean Bias", "Std Bias"])
-
-
-latexify(ensemble_stats, env=:table, latex=false)
-latexify(error_stats, env=:table, latex=false)
