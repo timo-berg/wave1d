@@ -90,6 +90,18 @@ ilocs = [1, 51, 101, 151, 199]
 ensemble_mean_no_ass = mean(X_data_no_ass[ilocs, :, :], dims=3)
 ensemble_mean_storm_ass = mean(X_data_storm_ass[ilocs, :, :], dims=3)
 
+
+locations = ["Cadzand", "Vlissingen", "Terneuzen", "Hansweert", "Bath"]
+times = s["t"] ./ 3600
+
+for i = 2:5
+    p = plot(times, observed_data_storm[i, 1:end-1], label="Storm Measurement", xlabel="Time [h]", ylabel="Height [m]", title="Waterlevel at $(locations[i])", dpi=1000)
+    plot!(p, times, ensemble_mean_no_ass[i, :, 1], label="No Assimilation")
+    plot!(p, times, ensemble_mean_storm_ass[i, :, 1], label="Storm Assimilation")
+    savefig(p, "figures/q9_storm_ass_levels_$(locations[i])")
+end
+
+
 # Stats between ensembles and observations storm
 
 
@@ -111,9 +123,9 @@ for i = 2:5
     observed_data_smooth = filtfilt(ones(10) / 10, observed_data_storm[i, 1:end-1])
 
     amplitude_error, timing_error = peak_statistic(ensemble_mean_smooth, observed_data_smooth)
-    rmse, bias = compute_rmse_bias(ensemble_mean_smooth, observed_data_smooth)
+    rmse_vals, bias = compute_rmse_bias(ensemble_mean_smooth, observed_data_smooth)
 
-    error_stats[i, :RMSE] = round(rmse, digits=2)
+    error_stats[i, :RMSE] = round(rmse_vals, digits=2)
     error_stats[i, :Bias] = round(bias, digits=2)
     error_stats[i, :Amplitude_Mean] = round(amplitude_error.mean, digits=2)
     error_stats[i, :Amplitude_Std] = round(amplitude_error.std, digits=2)
@@ -132,9 +144,9 @@ for i = 2:5
     observed_data_smooth = filtfilt(ones(10) / 10, observed_data_storm[i, 1:end-1])
 
     amplitude_error, timing_error = peak_statistic(ensemble_mean_smooth, observed_data_smooth)
-    rmse, bias = compute_rmse_bias(ensemble_mean_smooth, observed_data_smooth)
+    rmse_vals, bias = compute_rmse_bias(ensemble_mean_smooth, observed_data_smooth)
 
-    error_stats[i, :RMSE] = round(rmse, digits=2)
+    error_stats[i, :RMSE] = round(rmse_vals, digits=2)
     error_stats[i, :Bias] = round(bias, digits=2)
     error_stats[i, :Amplitude_Mean] = round(amplitude_error.mean, digits=2)
     error_stats[i, :Amplitude_Std] = round(amplitude_error.std, digits=2)
@@ -146,7 +158,10 @@ error_stats_no_ass = deepcopy(error_stats)
 delete!(error_stats_no_ass, 1)
 
 
+latexify(error_stats_storm, env=:table, latex=false)
 latexify(error_stats_no_ass, env=:table, latex=false)
+
+
 
 
 

@@ -98,7 +98,7 @@ function settings()
     itp = LinearInterpolation(bound_t, bound_values)
     s["h_left"] = itp(t)
 
-    s["time_cutoff"] = 168 - 0 # [0, 3, 6, 9, 12, 15, 18, 21, 24, 27, 30, 33, 36, 39] 
+    s["time_cutoff"] = 168 - 39 # [0, 3, 6, 9, 12, 15, 18, 21, 24, 27, 30, 33, 36, 39] 
 
     return s
 end
@@ -420,7 +420,7 @@ for n_ensemble ∈ [50]#[5, 10, 20, 50, 100]
     type = "predict"
     series_data, observed_data, X_data, s = simulate_enkf(n_ensemble, type)
 
-    @save "data/X_data_$(type)_$(168-s["time_cutoff"]).jld2" X_data #_$(168-s["time_cutoff"])
+    # @save "data/X_data_$(type)_$(168-s["time_cutoff"]).jld2" X_data #_$(168-s["time_cutoff"])
 
     # anim = @animate for i ∈ 1:length(s["t"])
     #     plot_state_for_gif(X_data[:, i, :], s, observed_data[:, i+1])

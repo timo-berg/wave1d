@@ -34,8 +34,8 @@ end
 
 p1 = plot(spread_enkf, label="Real Assimilation", xticks=(collect(1:length(ilocs)), loc_names), legend=:right, dpi=1000)
 plot!(p1, spread_sim_ass, label="Synthetic Assimilation")
-plot!(p1, spread_no_ass, label="No Assimilation")
-title!(p1, "Standard deviation of the ensemble")
+plot!(p1, spread_no_ass, label="No Assimilation", ylabel="STD [m]")
+title!(p1, "Standard Deviation of the Ensemble")
 savefig(p1, "figures/q6_std_ensemble.png")
 
 # RMSE between ensemble mean and obeserved_data is lower in sim_ass than in enkf
@@ -51,8 +51,8 @@ for i ∈ eachindex(ilocs)
 end
 
 p2 = plot(rmse_enkf, label="Real Assimilation", xticks=(collect(1:length(ilocs)), loc_names), legend=:right, dpi=1000)
-plot!(p2, rmse_sim_ass, label="Synthetic Assimilation")
-title!(p2, "RMSE of the ensemble mean and measurement data")
+plot!(p2, rmse_sim_ass, label="Synthetic Assimilation", ylabel="RMSE [m]")
+title!(p2, "RMSE of the Ensemble Mean and Measurement Data")
 savefig(p2, "figures/q6_rmse_ensemble.png")
 
 # obeserved_data lies between min(ensemble) and max(ensemble) of sim_ass
@@ -90,7 +90,7 @@ savefig(p5, "figures/q6_ensemble_capture.png")
 
 p6 = plot(sum(is_between_matrix_enkf, dims=2) ./ 2.88, label="Real Assimilation", ylabel="% covered", xticks=(collect(1:length(ilocs)), loc_names), dpi=1000)
 plot!(p6, sum(is_between_matrix_sim_ass, dims=2) ./ 2.88, label="Synthetic Assimilation")
-title!("Ensemble cover of measurement")
+title!("Ensemble Cover of Measurement")
 savefig(p6, "figures/q6_ensemble_cover_summary.png")
 
 

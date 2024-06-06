@@ -4,10 +4,15 @@ using JLD2
 using Statistics
 using Peaks
 using Plots
+using DSP
 
 struct stats #statistics of peaks
     mean::Float64
     std::Float64
+end
+
+function moving_average(data, window_size)
+    return filtfilt(ones(window_size) / window_size, data)
 end
 
 function compute_peak_statistic(series_data, observed_data, s)
@@ -84,7 +89,7 @@ end
 
 
 # Load the data
-observed_data = load("data/observed_data.jld2")["observed_data"]
+observed_data = load("data/observed_data_real.jld2")["observed_data"]
 X_data = load("data/X_data_new_bc_50.jld2")["X_data"]
 ilocs = [1, 51, 101, 151, 199]
 
@@ -109,9 +114,9 @@ for i = 1:5
     observed_data_smooth = filtfilt(ones(10) / 10, observed_data[i, 1:end-1])
 
     amplitude_error, timing_error = peak_statistic(ensemble_mean_smooth, observed_data_smooth)
-    rmse, bias = compute_rmse_bias(ensemble_mean_smooth, observed_data_smooth)
+    rmse_val, bias = compute_rmse_bias(ensemble_mean_smooth, observed_data_smooth)
 
-    error_stats[i, :RMSE] = round(rmse, digits=2)
+    error_stats[i, :RMSE] = round(rmse_val, digits=2)
     error_stats[i, :Bias] = round(bias, digits=2)
     error_stats[i, :Amplitude_Mean] = round(amplitude_error.mean, digits=2)
     error_stats[i, :Amplitude_Std] = round(amplitude_error.std, digits=2)
@@ -120,3 +125,28 @@ for i = 1:5
 end
 
 latexify(error_stats, env=:table, latex=false)
+
+
+# Moving average error 
+X_data_enkf = load("data/X_data_enkf.jld2")["X_data"]
+X_data_new_ic = load("data/X_data_new_ic.jld2")["X_data"]
+X_data_sim_ass = load("data/X_data_sim_ass.jld2")["X_data"]
+observed_data = load("data/observed_data_real.jld2")["observed_data"]
+observed_data_sim = load("data/observed_data_sim.jld2")["observed_data"]
+
+
+ensemble_mean_enkf = mean(X_data_enkf, dims=3)
+ensemble_mean_new_ic = mean(X_data_new_ic, dims=3)
+ensemble_mean_sim_ass = mean(X_data_sim_ass, dims=3)
+
+times = s["t"] ./ 3600
+
+i = 5
+mov_avg_enkf = moving_average(ensemble_mean_enkf[ilocs[i], :, 1] .- observed_data[i, 1:end-1], 5)
+mov_avg_new_ic = moving_average(ensemble_mean_new_ic[ilocs[i], :, 1] .- observed_data_sim[i, 1:end-1], 5)
+mov_avg_sim_ass = moving_average(ensemble_mean_sim_ass[ilocs[i], :, 1] .- observed_data_sim[i, 1:end-1], 5)
+
+p = plot(times, mov_avg_enkf, label="Real", xlabel="Time [h]", ylabel ="Error [m]", title="Sliding Error between Model and Measurement (Bath)", dpi=1000)
+plot!(p, times, mov_avg_new_ic, label="New IC")
+plot!(p, times, mov_avg_sim_ass, label="Synthetic")
+savefig(p, "figures/q8_sliding_error.png")

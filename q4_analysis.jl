@@ -4,6 +4,7 @@ using JLD2
 using Statistics
 using Peaks
 using Plots
+using DSP
 
 struct stats #statistics of peaks
     mean::Float64
@@ -107,12 +108,12 @@ error_stats = DataFrame(
 for i = 1:5
     # smoothing the data
     ensemble_mean_smooth = filtfilt(ones(10) / 10, ensemble_mean_no_ass[i, :, 1])
-    observed_data_smooth = filtfilt(ones(10) / 10, observed_data_storm[i, 1:end-1])
+    observed_data_smooth = filtfilt(ones(10) / 10, observed_data_chill[i, 1:end-1])
 
     amplitude_error, timing_error = peak_statistic(ensemble_mean_smooth, observed_data_smooth)
-    rmse, bias = compute_rmse_bias(ensemble_mean_smooth, observed_data_smooth)
+    rmse_val, bias = compute_rmse_bias(ensemble_mean_smooth, observed_data_smooth)
 
-    error_stats[i, :RMSE] = round(rmse, digits=2)
+    error_stats[i, :RMSE] = round(rmse_val, digits=2)
     error_stats[i, :Bias] = round(bias, digits=2)
     error_stats[i, :Amplitude_Mean] = round(amplitude_error.mean, digits=2)
     error_stats[i, :Amplitude_Std] = round(amplitude_error.std, digits=2)
@@ -125,7 +126,7 @@ error_stats_no_ass = deepcopy(error_stats)
 
 latexify(error_stats_no_ass, env=:table, latex=false)
 
-p = plot(xlabel="Time [h]", ylabel="Waterlevel [m]", title="Standard deviation of the ensemble accross time")
+p = plot(xlabel="Time [h]", ylabel="STD [m]", title="Standard deviation of the Ensemble")
 for i ∈ eachindex(ilocs)
     variances = std(X_data_no_ass[ilocs[i], :, :], dims=2)
     variances = filtfilt(ones(5) / 5, variances)
@@ -137,16 +138,16 @@ savefig(p, "figures/q4_std_ensemble_time.png")
 times = Int.(round.(LinRange(2, 288, 4)))
 
 times = [1, 3, 5, 7, 10, 15, 20, 35, 50, 100, 250]
-colors = cgrad(:RdYlBu, times, rev=true)  # Use the Viridis color scale
+colors = cgrad(:roma, times, rev=true)  # Use the Viridis color scale
 
 
-p = plot(xlabel="Distance [m]", ylabel="Waterlevel [m]", title="Standard deviation of the ensemble accross space")
+p = plot(xlabel="Distance [m]", ylabel="STD [m]", title="Standard deviation of the Ensemble")
 for i ∈ eachindex(times)
     variances = std(X_data_no_ass[1:2:end, times[i], :], dims=2)
     variances = filtfilt(ones(5) / 5, variances)
-    plot!(p, variances, label=1 / 60 * s["t"][times[i]], color=colors[i])
+    plot!(p, variances, label=1 / 60 * s["t"][times[i]], color=palette(:roma, 11)[i])#, color=colors[i]
 end
-p = plot(p, legend=:outerbottomright, legend_title="Time [min]", size=(600, 400))
+p = plot(p, legend=:outerbottomright, legend_title="Time [min]", size=(600, 400), palette=:roma)
 savefig(p, "figures/q4_std_ensemble_space.png")
 
 

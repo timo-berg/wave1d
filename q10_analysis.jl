@@ -18,7 +18,7 @@ X_data_36 = load("data/X_data_predict_36.jld2")["X_data"]
 X_data_39 = load("data/X_data_predict_39.jld2")["X_data"]
 
 cutoffs = [0, 3, 6, 9, 12, 15, 18, 21, 24, 27, 30, 33, 36, 39] 
-cutoff_times = s["t"][168 .- cutoffs] ./ 3600
+cutoff_times = s["t"][168 .- cutoffs] ./ 3600 .- 28
 
 ilocs = [51, 101, 151, 199]
 loc_names = ["Vlissingen", "Terneuzen", "Hansweert", "Bath"]
@@ -60,9 +60,9 @@ end
 # Plot the peak differences
 p1 = plot()
 for i ∈ eachindex(ilocs)
-    plot!(p1, cutoffs, peak_diffs[i, :], label=loc_names[i], xlabel="Cutoff [h]", ylabel="Waterlevel [m]")
+    plot!(p1, cutoffs, peak_diffs[i, :], label=loc_names[i], xlabel="Cutoff [h]", ylabel="Error [m]", title="Peak Differences Based on Cut-Off Before Peak")
 end
-plot(p1, legend=:bottomright, title="Peak Differences base on cut-off before peak", xticks=(cutoffs[1:2:end], cutoff_times[1:2:end]))
+plot(p1, legend=:bottomright, title="Peak Differences Based on Cut-Off Before Peak", xticks=(cutoffs[1:2:end], string.(cutoff_times[1:2:end])))
 savefig(p1, "figures/q10_peak_diff.png")
 
 

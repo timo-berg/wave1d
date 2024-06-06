@@ -2,9 +2,10 @@ using JLD2
 using Plots
 using Statistics
 using LsqFit
+using LaTeXStrings
 
 function rmse(a, b)
-    return sqrt(mean((a .- b) .^ 2))
+    return mean(abs.(a .- b))
 end
 
 # Question 7
@@ -58,7 +59,7 @@ plots = []
 
 for loc_idx ∈ eachindex(ilocs)
     # Log-Log Plot
-    p = plot(n_ensembles, rmse_sim_ass[loc_idx, :], label="Measured", xlabel="n", ylabel="RMSE", title=loc_names[loc_idx])
+    p = plot(n_ensembles, rmse_sim_ass[loc_idx, :], label="Measured", xlabel=L"N", ylabel="RMSE [m]", title=loc_names[loc_idx])
 
     m(t, p) = p[3] .* t .^ p[2] .+ p[1]
     p0 = [0, -0.5, 1]
@@ -73,10 +74,10 @@ for loc_idx ∈ eachindex(ilocs)
 
     param_mat[loc_idx, :] = fit.param
 
-    push!(plots, p)
+    total_plot = plot(p, size=(600, 400), dpi=1000, legend=:topright)
+    savefig(total_plot, "figures/q7_convergencec_fit_$(loc_names[loc_idx]).png")
 end
 
-total_plot = plot(plots..., size=(1200, 600), dpi=1000, legend=:bottomright)
-savefig(total_plot, "figures/q7_convergencec_fit.png")
 
-round.(param_mat, digits=4)
+
+latexify(round.(param_mat, digits=4),  env=:table, latex=false)
