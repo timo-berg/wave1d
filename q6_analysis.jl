@@ -47,7 +47,7 @@ rmse_sim_ass = zeros(Float64, length(ilocs))
 
 for i ∈ eachindex(ilocs)
     rmse_enkf[i] = rmse(ensemble_mean_enkf[ilocs[i], :, :], observed_data_real[i, 1:end-1])
-    rmse_sim_ass[i] = rmse(ensemble_mean_sim_ass[ilocs[i], :, :], observed_data[i, 1:end-1])
+    rmse_sim_ass[i] = rmse(ensemble_mean_sim_ass[ilocs[i], :, :], observed_data_sim[i, 1:end-1])
 end
 
 p2 = plot(rmse_enkf, label="Real Assimilation", xticks=(collect(1:length(ilocs)), loc_names), legend=:right, dpi=1000)
@@ -111,11 +111,11 @@ error_stats = DataFrame(
 
 for i = 1:5
     # smoothing the data
-    ensemble_mean_smooth = filtfilt(ones(10) / 10, ensemble_mean_sim_ass[i, :, 1])
+    ensemble_mean_smooth = filtfilt(ones(10) / 10, ensemble_mean_sim_ass[ilocs[i], :, 1])
     observed_data_smooth = filtfilt(ones(10) / 10, observed_data_sim[i, 1:end-1])
 
     amplitude_error, timing_error = peak_statistic(ensemble_mean_smooth, observed_data_smooth)
-    rmse_val, bias = compute_rmse_bias(ensemble_mean_sim_ass[i, :, 1], observed_data_sim[i, 1:end-1])
+    rmse_val, bias = compute_rmse_bias(ensemble_mean_sim_ass[ilocs[i], :, 1], observed_data_sim[i, 1:end-1])
 
     error_stats[i, :RMSE] = round(rmse_val, digits=2)
     error_stats[i, :Bias] = round(bias, digits=2)
@@ -131,11 +131,11 @@ latexify(error_stats_sim_ass, env=:table, latex=false)
 
 for i = 1:5
     # smoothing the data
-    ensemble_mean_smooth = filtfilt(ones(10) / 10, ensemble_mean_enkf[i, :, 1])
+    ensemble_mean_smooth = filtfilt(ones(10) / 10, ensemble_mean_enkf[ilocs[i], :, 1])
     observed_data_smooth = filtfilt(ones(10) / 10, observed_data_real[i, 1:end-1])
 
     amplitude_error, timing_error = peak_statistic(ensemble_mean_smooth, observed_data_smooth)
-    rmse_val, bias = compute_rmse_bias(ensemble_mean_enkf[i, :, 1], observed_data_real[i, 1:end-1])
+    rmse_val, bias = compute_rmse_bias(ensemble_mean_enkf[ilocs[i], :, 1], observed_data_real[i, 1:end-1])
 
     error_stats[i, :RMSE] = round(rmse_val, digits=2)
     error_stats[i, :Bias] = round(bias, digits=2)
