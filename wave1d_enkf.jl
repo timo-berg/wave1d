@@ -230,7 +230,7 @@ function timestep_enkf(X, t_idx, observations, settings, type)
     # Measurement update
     K = P * H' * inv(H * P * H' + R)
 
-    if type ∈ ["enkf", "sim_ass", "new_bc", "storm_ass", "predict", "new_ic"]
+    if type ∈ ["enkf", "sim_ass", "new_bc", "storm_ass", "predict", "new_ic", "new_ic_vel"]
         X = X + K * (observations .- H * X)
     end
 
@@ -322,7 +322,7 @@ function simulate_enkf(n_ensemble, type)
         observed_data[5, :] = obs_values[:]
 
         X_observe = zeros(Float64, length(ilocs), length(obs_times))
-    elseif type ∈ ["sim_ass", "new_bc", "new_ic"]
+    elseif type ∈ ["sim_ass", "new_bc", "new_ic", "new_ic_vel"]
         observed_data = load("data/observed_data_sim.jld2")["observed_data"]
     elseif type ∈ ["storm_ass", "predict"]
         #load observations
@@ -344,8 +344,17 @@ function simulate_enkf(n_ensemble, type)
     if type ∈ ["new_ic"]
         x_len = length(x)
 
-        x = 2 .* sin.((1:x_len) * 2 * pi / x_len)
+        x_height = 1:2:x_len-1
+
+        x[x_height] = 2 .* sin.((1:length(x_height)) * 2 * pi / 200)
+    elseif type ∈ ["new_ic_vel"]
+        x_len = length(x)
+
+        x_height = 1:2:x_len-1
+
+        x[x_height] = 0.5 .* sin.((1:length(x_height)) * 2 * pi / 200)
     end
+
     # initialize ensemble
 
     X = zeros(Float64, length(x), n_ensemble)
@@ -417,17 +426,17 @@ types = ["enkf", "no_ass", "sim_ass", "new_bc", "storm_ass", "predict", "new_ic"
 
 
 for n_ensemble ∈ [50]#[5, 10, 20, 50, 100]
-    type = "predict"
+    type = "new_ic_vel"
     series_data, observed_data, X_data, s = simulate_enkf(n_ensemble, type)
 
-    # @save "data/X_data_$(type)_$(168-s["time_cutoff"]).jld2" X_data #_$(168-s["time_cutoff"])
+    @save "data/X_data_$(type).jld2" X_data #_$(168-s["time_cutoff"])
 
-    # anim = @animate for i ∈ 1:length(s["t"])
-    #     plot_state_for_gif(X_data[:, i, :], s, observed_data[:, i+1])
-    # end
+    anim = @animate for i ∈ 1:length(s["t"])
+        plot_state_for_gif(X_data[:, i, :], s, observed_data[:, i+1])
+    end
 
 
-    # gif(anim, "figures/animation_$(type).gif", fps=15)
+    gif(anim, "figures/animation_$(type).gif", fps=15)
 end
 
 # type = "sim_ass"

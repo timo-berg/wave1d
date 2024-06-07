@@ -130,6 +130,7 @@ latexify(error_stats, env=:table, latex=false)
 # Moving average error 
 X_data_enkf = load("data/X_data_enkf.jld2")["X_data"]
 X_data_new_ic = load("data/X_data_new_ic.jld2")["X_data"]
+X_data_new_ic_vel = load("data/X_data_new_ic_vel.jld2")["X_data"]
 X_data_sim_ass = load("data/X_data_sim_ass.jld2")["X_data"]
 observed_data = load("data/observed_data_real.jld2")["observed_data"]
 observed_data_sim = load("data/observed_data_sim.jld2")["observed_data"]
@@ -137,6 +138,7 @@ observed_data_sim = load("data/observed_data_sim.jld2")["observed_data"]
 
 ensemble_mean_enkf = mean(X_data_enkf, dims=3)
 ensemble_mean_new_ic = mean(X_data_new_ic, dims=3)
+ensemble_mean_new_ic_vel = mean(X_data_new_ic_vel, dims=3)
 ensemble_mean_sim_ass = mean(X_data_sim_ass, dims=3)
 
 times = s["t"] ./ 3600
@@ -144,14 +146,18 @@ times = s["t"] ./ 3600
 i = 5
 mov_avg_enkf = moving_average(ensemble_mean_enkf[ilocs[i], :, 1] .- observed_data[i, 1:end-1], 5)
 mov_avg_new_ic = moving_average(ensemble_mean_new_ic[ilocs[i], :, 1] .- observed_data_sim[i, 1:end-1], 5)
+mov_avg_new_ic_vel = moving_average(ensemble_mean_new_ic_vel[ilocs[i], :, 1] .- observed_data_sim[i, 1:end-1], 5)
 mov_avg_sim_ass = moving_average(ensemble_mean_sim_ass[ilocs[i], :, 1] .- observed_data_sim[i, 1:end-1], 5)
 
-p = plot(times, mov_avg_enkf, label="Real", xlabel="Time [h]", ylabel ="Error [m]", title="Sliding Error between Model and Measurement (Bath)", dpi=1000)
+p = plot(times, mov_avg_enkf, label="Real Data", xlabel="Time [h]", ylabel ="Error [m]", title="Sliding Error between Model and Measurement (Bath)", size=(700,400), dpi=1000)
 plot!(p, times, mov_avg_new_ic, label="New IC")
 plot!(p, times, mov_avg_sim_ass, label="Synthetic")
+plot!(p, times, mov_avg_new_ic_vel, label="New IC with Velocity")
+
 savefig(p, "figures/q8_sliding_error.png")
 
-x_len = size(X_data_new_ic, 1)
+# x_len = size(X_data_new_ic, 1)
 
-p = plot(2 .* sin.((1:x_len) * 2 * pi / x_len), label="", xlabel="Location [m]", ylabel="Waterlevel [m]", title="New Inital Condition", dpi=1000)
-savefig(p, "figures/q8_new_IC.png")
+# xh = 0.0:1.000050253781597:99.0049751243781
+# p = plot(xh,2 .* sin.((1:x_len) * 2 * pi / x_len), label="", xlabel="Location [km]", ylabel="Waterlevel [m]", title="New Inital Condition", dpi=1000)
+# savefig(p, "figures/q8_new_IC.png")
