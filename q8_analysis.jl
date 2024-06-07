@@ -150,3 +150,8 @@ p = plot(times, mov_avg_enkf, label="Real", xlabel="Time [h]", ylabel ="Error [m
 plot!(p, times, mov_avg_new_ic, label="New IC")
 plot!(p, times, mov_avg_sim_ass, label="Synthetic")
 savefig(p, "figures/q8_sliding_error.png")
+
+x_len = size(X_data_new_ic, 1)
+
+p = plot(2 .* sin.((1:x_len) * 2 * pi / x_len), label="", xlabel="Location [m]", ylabel="Waterlevel [m]", title="New Inital Condition", dpi=1000)
+savefig(p, "figures/q8_new_IC.png")
