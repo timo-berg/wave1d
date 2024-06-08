@@ -111,7 +111,7 @@ for i = 1:5
     observed_data_smooth = filtfilt(ones(10) / 10, observed_data_chill[i, 1:end-1])
 
     amplitude_error, timing_error = peak_statistic(ensemble_mean_smooth, observed_data_smooth)
-    rmse_val, bias = compute_rmse_bias(ensemble_mean_smooth, observed_data_smooth)
+    rmse_val, bias = compute_rmse_bias(ensemble_mean_no_ass[i, :, 1], observed_data_chill[i, 1:end-1])
 
     error_stats[i, :RMSE] = round(rmse_val, digits=2)
     error_stats[i, :Bias] = round(bias, digits=2)

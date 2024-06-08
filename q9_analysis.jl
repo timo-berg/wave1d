@@ -101,6 +101,11 @@ for i = 2:5
     savefig(p, "figures/q9_storm_ass_levels_$(locations[i])")
 end
 
+i = 1
+p = plot(times, ensemble_mean_no_ass[i, :, 1], label="No Assimilation", xlabel="Time [h]", ylabel="Height [m]", title="Waterlevel at $(locations[i])", dpi=1000)
+plot!(p, times, ensemble_mean_storm_ass[i, :, 1], label="Storm Assimilation")
+savefig(p, "figures/q9_storm_ass_levels_$(locations[i])")
+
 
 # Stats between ensembles and observations storm
 
